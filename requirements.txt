@@ -1,7 +1,7 @@
+Django==2.0.3
 django-redis
-cryptography
-Django==1.9.6
 hiredis
+pycrypto
 mock
 django-rq==0.9.1
 rq==0.6.0

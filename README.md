@@ -1,6 +1,6 @@
 # Django secure redis
 Django caching plugin for django-redis that adds a Serializer class and configuration to support transparent,
-symmetrical encryption of cached values using the python cryptography library.
+symmetrical encryption of cached values using AES 16, 24, or 32 byte encryption.
 This plugin also provides encryption for django-rq jobs by simply using the `@secure_redis.secure_rq.job` decorator to annotate the task method instead of using `@django_rq.job`
 
 # Important
@@ -13,45 +13,69 @@ Before using this library, make sure that you really need it. By using it, put i
 1. Use `pip install` to get this library
 2. In `settings.py` in your project, go to `CACHE` settings and ensure you put the following:
  * Add `secure_redis` to `INSTALLED_APPS`
- * Provide `REDIS_SECRET_KEY` to be used in the encryption
+ * Provide base64 encoded 16, 24, or 32 byte `REDIS_SECRET_KEY` for encryption cipher.
  * Configure the `SERIALIZER` setting to use `secure_redis.serializer.SecureSerializer`
 
 # Settings sample
+
+[Django-redis-cache Documentation](
+https://media.readthedocs.org/pdf/django-redis-cache/latest/django-redis-cache.pdf)
+
+#### Parsing
+NOTE: redis-py comes with two parsers: HiredisParser and PythonParser. The former uses the hiredis library to
+parse responses from the redis server, while the latter uses Python. Hiredis is a library that uses C, so it is much faster
+than the python parser, but requires installing the library separately.
+#### Pickle
+The default pickle protocol is -1, which is the highest and latest version. This value should be pinned to a specific
+protocol number, since -1 means different things between versions of Python.
+#### TCP connction
+When working with a TCP connection, it may be beneficial to set the SOCKET_TIMEOUT and
+SOCKET_CONNECT_TIMEOUT options to prevent your app from blocking indefinitely.
+#### Unix Socket
+It is faster to connect using unix sockets rather than TCP.
+* edit `/etc/redis/redis.conf`
+* comment out 'port' and 'bind' lines
+* uncomment the two unixsocket lines
+```
+unixsocket /var/run/redis/redis.sock
+unixsocketperm 700
+```
+* restart redis `sudo service redis-server restart`
+
+#### DB
+The DB option will allow key/values to exist in a different keyspace. The DB value can either be defined in the
+OPTIONS or in the LOCATION scheme.
+#### KEY_PREFIX
+Must be used if sharing the same cache Redis cache with other clients
+
+### Sample using unixsocket:
 ```
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': REDIS_URL,
+        'LOCATION': '/var/run/redis/redis.sock',
         'OPTIONS': {
-            # "SOCKET_CONNECT_TIMEOUT": 5,  # in seconds
-            'DB': REDIS_DB,
+            'DB': 1,
             'PARSER_CLASS': 'redis.connection.HiredisParser',
-            'REDIS_SECRET_KEY': 'kPEDO_pSrPh3qGJVfGAflLZXKAh4AuHU64tTlP-f_PY=',
             'SERIALIZER': 'secure_redis.serializer.SecureSerializer',
+            'PICKLE_VERSION': 2,
+            'REDIS_SECRET_KEY': '4VQ57H2MldvuAcqybWPenwRe3CXSW5R5JHQPkbthMZI=',
         },
         'KEY_PREFIX': 'app1:secure',
-        'TIMEOUT': 60 * 60 * 24,  # 1 day
-    },
-    'insecure': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': REDIS_URL,
-        'OPTIONS': {
-            # "SOCKET_CONNECT_TIMEOUT": 5,  # in seconds
-            'DB': REDIS_DB,
-            'PARSER_CLASS': 'redis.connection.HiredisParser',
-        },
-        'KEY_PREFIX': 'app1',
-        'TIMEOUT': 60 * 60 * 24,  # 1 day
+        'TIMEOUT': 60 * 60 * 24
     },
 }
 ```
+
+**NOTE:** Do NOT store REDIS_SECRET_KEY in source code.  Sensitive data should be read in from files that are not committed to source repository.
+
 # Data migration
 If you already have an existing data in your redis, you might need to consider data migration for un-encrypted values,
 you are free to handle this case as you want, we would suggest to use django management command to handle this case:
 
 1. Keep old redis cache settings and add your new secure django redis cache configuration
 2. Make sure your new secure django redis cache settings has different `KEY_PREFIX`
-3. Make sure old configutation still point at the correct `REDIS_URL` and `REDIS_DB`
+3. Make sure old configutation still point at the correct `LOCATION` and `DB`
 4. You can see an example configuration in the previous section of `Settings sample`
 5. Make sure either to delete old keys or make sure your redis can holds the new values
 6. Code sinppet for sample command is shown below:

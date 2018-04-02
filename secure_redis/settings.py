@@ -22,5 +22,4 @@ secure_cache_options_settings = get_secure_cache_opts()
 if secure_cache_options_settings:
     if not secure_cache_options_settings.get('REDIS_SECRET_KEY'):
         raise ImproperlyConfigured(
-            'REDIS_SECRET_KEY must be defined in settings in secure cache OPTIONS')
-
+            'REDIS_SECRET_KEY must a base64 encoded random 32byte key defined in settings in secure cache OPTIONS')
